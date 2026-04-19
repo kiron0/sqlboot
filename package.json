@@ -1,6 +1,6 @@
 {
   "name": "sqlboot",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Cross-platform npm CLI for Oracle SQL*Plus, Docker Oracle XE, rlwrap, and the sqlboot command.",
   "license": "MIT",
   "bin": {
@@ -10,6 +10,7 @@
     "bin/",
     "sqlboot",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {

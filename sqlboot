@@ -52,6 +52,7 @@ MACOS_SQLPLUS_URL_DEFAULT="https://download.oracle.com/otn_software/mac/instantc
 
 OS_TYPE=""
 OS_ARCH=""
+IS_WSL="0"
 PROFILE_FILE=""
 LIB_PATH_VAR=""
 IC_BASIC_URL=""
@@ -154,6 +155,7 @@ require_command() {
 
 detect_os() {
   OS_ARCH="$(uname -m)"
+  IS_WSL="0"
 
   case "$(uname -s)" in
     Darwin)
@@ -178,6 +180,10 @@ detect_os() {
       IC_BASIC_URL="${SQLBOOT_IC_BASIC_URL:-$LINUX_BASIC_URL_DEFAULT}"
       IC_SQLPLUS_URL="${SQLBOOT_IC_SQLPLUS_URL:-$LINUX_SQLPLUS_URL_DEFAULT}"
 
+      if [[ -n "${WSL_DISTRO_NAME:-}" ]] || grep -qiE 'microsoft|wsl' /proc/sys/kernel/osrelease 2>/dev/null; then
+        IS_WSL="1"
+      fi
+
       if [[ -r /etc/os-release ]]; then
         # shellcheck disable=SC1091
         . /etc/os-release
@@ -200,7 +206,11 @@ detect_os() {
       ;;
   esac
 
-  log_ok "Detected $OS_TYPE ($OS_ARCH)"
+  if [[ "$IS_WSL" == "1" ]]; then
+    log_ok "Detected $OS_TYPE ($OS_ARCH, WSL)"
+  else
+    log_ok "Detected $OS_TYPE ($OS_ARCH)"
+  fi
 }
 
 # -----------------------------
@@ -311,6 +321,19 @@ install_docker_macos() {
 }
 
 install_docker_linux() {
+  if [[ "$IS_WSL" == "1" ]]; then
+    if ! command_exists docker; then
+      die "Docker CLI was not found in WSL. Install Docker Desktop for Windows and enable WSL integration for this distro."
+    fi
+
+    if ! docker_is_ready; then
+      die "Docker is not reachable from WSL. Start Docker Desktop and enable Settings > Resources > WSL integration for this distro."
+    fi
+
+    log_ok "Docker Desktop WSL integration is ready"
+    return 0
+  fi
+
   if command_exists docker; then
     log_ok "Docker is already installed"
   else
@@ -354,6 +377,8 @@ ensure_docker_running() {
 
   if [[ "$OS_TYPE" == "macos" ]]; then
     launch_docker_macos
+  elif [[ "$IS_WSL" == "1" ]]; then
+    die "Docker is not reachable from WSL. Start Docker Desktop and enable WSL integration for this distro."
   else
     run_sudo systemctl start docker
     if ! docker_is_ready && ! run_sudo docker info >/dev/null 2>&1; then

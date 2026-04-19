@@ -1,6 +1,6 @@
 # sqlboot
 
-`sqlboot` sets up a local Oracle SQL*Plus workflow on macOS and Ubuntu-based Linux.
+`sqlboot` sets up a local Oracle SQL*Plus workflow on macOS, Ubuntu-based Linux, and Windows through WSL2 Ubuntu.
 
 It installs the required tools, starts an Oracle XE Docker container, configures SQL*Plus, and gives you one command:
 
@@ -12,6 +12,7 @@ sqlboot
 
 - Installs `curl`, `unzip`, and `rlwrap`.
 - Installs Docker Desktop on macOS or `docker.io` on Ubuntu-based Linux.
+- Uses Docker Desktop WSL integration on Windows through WSL2.
 - Pulls `gvenzl/oracle-xe:21-slim`.
 - Creates and starts an `oracle-xe` container on port `1521`.
 - Downloads Oracle Instant Client and SQL*Plus.
@@ -44,8 +45,31 @@ conn system/1234@XE
 - macOS with zsh and Homebrew
 - Ubuntu-based Linux
 - Zorin OS
+- Windows through WSL2 Ubuntu
 
-Other systems are not supported.
+Native Windows PowerShell/CMD is not supported.
+
+## Windows
+
+Use WSL2 with Ubuntu:
+
+```powershell
+wsl --install
+```
+
+Install Docker Desktop for Windows, then enable WSL integration:
+
+```text
+Docker Desktop > Settings > Resources > WSL integration
+```
+
+Open Ubuntu/WSL and run:
+
+```sh
+npx sqlboot
+```
+
+Do not run `sqlboot` from native PowerShell or CMD.
 
 ## Defaults
 
@@ -102,6 +126,8 @@ Then connect with the generated `XE` alias, or update `tnsnames.ora` if needed.
 
 On Linux, you may need to log out and back in after Docker is installed so your user can access the Docker socket without `sudo`.
 
+On Windows through WSL2, Docker is managed by Docker Desktop. `sqlboot` will not install or start Docker Engine with `systemctl` inside WSL.
+
 On macOS, Docker Desktop may require first-run setup before the installer can continue.
 
 ## Troubleshooting
@@ -138,3 +164,5 @@ npx sqlboot@latest
 npm run check
 npm run pack:dry
 ```
+
+See [CHANGELOG.md](CHANGELOG.md) for version history.
