@@ -33,3 +33,5 @@ temp/
 .codex
 asd
 granuler_token.txt
+*token*.txt
+*token*
