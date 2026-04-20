@@ -7,7 +7,7 @@ describe('runCli platform checks', () => {
   it('fails on unsupported platform', () => {
     const deps = createCliDeps({ platform: 'win32' });
 
-    const status = runCli([], deps);
+    const status = runCli(['status'], deps);
 
     expect(status).toBe(1);
     expect(deps.stderr.write).toHaveBeenCalledWith(
@@ -22,7 +22,7 @@ describe('runCli platform checks', () => {
       }
     });
 
-    const status = runCli([], deps);
+    const status = runCli(['status'], deps);
 
     expect(status).toBe(1);
     expect(deps.stderr.write).toHaveBeenCalledWith('[ERROR] bash is required.\n');

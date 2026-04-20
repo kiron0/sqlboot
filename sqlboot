@@ -58,6 +58,7 @@ LIB_PATH_VAR=""
 IC_BASIC_URL=""
 IC_SQLPLUS_URL=""
 DOCKER_PLATFORM_ARGS=()
+DETECT_OS_QUIET="0"
 
 # -----------------------------
 # Logging
@@ -167,7 +168,9 @@ detect_os() {
 
       if [[ "$OS_ARCH" == "arm64" ]]; then
         DOCKER_PLATFORM_ARGS=(--platform linux/amd64)
-        log_info "Apple Silicon detected. Docker will use linux/amd64 for Oracle XE."
+        if [[ "$DETECT_OS_QUIET" != "1" ]]; then
+          log_info "Apple Silicon detected. Docker will use linux/amd64 for Oracle XE."
+        fi
       elif [[ "$OS_ARCH" != "x86_64" ]]; then
         die "Unsupported macOS architecture: $OS_ARCH"
       fi
@@ -206,10 +209,12 @@ detect_os() {
       ;;
   esac
 
-  if [[ "$IS_WSL" == "1" ]]; then
-    log_ok "Detected $OS_TYPE ($OS_ARCH, WSL)"
-  else
-    log_ok "Detected $OS_TYPE ($OS_ARCH)"
+  if [[ "$DETECT_OS_QUIET" != "1" ]]; then
+    if [[ "$IS_WSL" == "1" ]]; then
+      log_ok "Detected $OS_TYPE ($OS_ARCH, WSL)"
+    else
+      log_ok "Detected $OS_TYPE ($OS_ARCH)"
+    fi
   fi
 }
 
@@ -277,6 +282,14 @@ install_required_packages() {
 
 docker_is_ready() {
   command_exists docker && docker info >/dev/null 2>&1
+}
+
+docker_is_accessible() {
+  if docker_is_ready; then
+    return 0
+  fi
+
+  [[ "$OS_TYPE" == "linux" ]] && need_sudo && run_sudo docker info >/dev/null 2>&1
 }
 
 launch_docker_macos() {
@@ -409,6 +422,23 @@ container_exists() {
 
 container_is_running() {
   docker_cmd ps --format '{{.Names}}' | grep -Fxq "$ORACLE_CONTAINER"
+}
+
+require_docker_cli() {
+  command_exists docker || die "Docker CLI not found."
+}
+
+require_docker_ready() {
+  require_docker_cli
+  if ! docker_is_accessible; then
+    if [[ "$OS_TYPE" == "macos" ]]; then
+      die "Docker not running. Start Docker Desktop."
+    elif [[ "$IS_WSL" == "1" ]]; then
+      die "Docker not reachable in WSL. Start Docker Desktop, enable WSL integration."
+    else
+      die "Docker not running. Start Docker service."
+    fi
+  fi
 }
 
 create_oracle_container() {
@@ -634,6 +664,194 @@ launch_sqlplus() {
   exec rlwrap -H "$SQLPLUS_HISTORY" "$spath" /nolog
 }
 
+show_status() {
+  DETECT_OS_QUIET="1"
+  detect_os
+
+  printf 'Status\n'
+  printf '  OS: %s (%s)\n' "$OS_TYPE" "$OS_ARCH"
+
+  if command_exists docker; then
+    printf '  Docker CLI: ok\n'
+  else
+    printf '  Docker CLI: missing\n'
+  fi
+
+  if docker_is_accessible; then
+    printf '  Docker daemon: ok\n'
+    if container_exists; then
+      if container_is_running; then
+        printf '  Oracle container: running\n'
+      else
+        printf '  Oracle container: stopped\n'
+      fi
+    else
+      printf '  Oracle container: missing\n'
+    fi
+  else
+    printf '  Docker daemon: not running\n'
+    printf '  Oracle container: skipped\n'
+  fi
+
+  local spath
+  spath="$(sqlplus_path)"
+  if [[ -n "$spath" ]]; then
+    printf '  SQL*Plus: ok\n'
+  else
+    printf '  SQL*Plus: missing\n'
+  fi
+
+  if [[ -f "$TNSNAMES_FILE" ]]; then
+    printf '  TNS config: ok\n'
+  else
+    printf '  TNS config: missing\n'
+  fi
+
+  if [[ -x "$INSTALL_PATH" ]]; then
+    printf '  Launcher: ok\n'
+  else
+    printf '  Launcher: missing\n'
+  fi
+}
+
+show_logs() {
+  DETECT_OS_QUIET="1"
+  detect_os
+  require_docker_ready
+  container_exists || die "Container $ORACLE_CONTAINER does not exist."
+  docker_cmd logs --tail 120 "$ORACLE_CONTAINER"
+}
+
+run_doctor() {
+  DETECT_OS_QUIET="1"
+  detect_os
+
+  local failures=0
+  local spath
+  spath="$(sqlplus_path)"
+  local next_step=""
+
+  printf 'Doctor\n'
+  printf '  OS: %s (%s)\n' "$OS_TYPE" "$OS_ARCH"
+
+  if command_exists docker; then
+    printf '  Docker CLI: ok\n'
+  else
+    printf '  Docker CLI: missing\n'
+    failures=$((failures + 1))
+    next_step="Install Docker first."
+  fi
+
+  if docker_is_accessible; then
+    printf '  Docker daemon: ok\n'
+  else
+    printf '  Docker daemon: not running\n'
+    failures=$((failures + 1))
+    if [[ -z "$next_step" ]]; then
+      if [[ "$OS_TYPE" == "macos" ]]; then
+        next_step="Start Docker Desktop, wait until ready, rerun doctor."
+      elif [[ "$IS_WSL" == "1" ]]; then
+        next_step="Start Docker Desktop on Windows, enable WSL integration, rerun doctor."
+      else
+        next_step="Start Docker service, then rerun doctor."
+      fi
+    fi
+  fi
+
+  if [[ -n "$spath" ]]; then
+    printf '  SQL*Plus: ok\n'
+  else
+    printf '  SQL*Plus: missing\n'
+    failures=$((failures + 1))
+    if [[ -z "$next_step" ]]; then
+      next_step="Run `sqlboot init`."
+    fi
+  fi
+
+  if [[ -f "$TNSNAMES_FILE" ]]; then
+    printf '  TNS config: ok\n'
+  else
+    printf '  TNS config: missing\n'
+    failures=$((failures + 1))
+    if [[ -z "$next_step" ]]; then
+      next_step="Run `sqlboot init`."
+    fi
+  fi
+
+  if [[ -x "$INSTALL_PATH" ]]; then
+    printf '  Launcher: ok\n'
+  else
+    printf '  Launcher: missing\n'
+    failures=$((failures + 1))
+    if [[ -z "$next_step" ]]; then
+      next_step="Run `sqlboot init`."
+    fi
+  fi
+
+  if docker_is_accessible; then
+    if container_exists; then
+      if container_is_running; then
+        printf '  Oracle container: running\n'
+      else
+        printf '  Oracle container: stopped\n'
+        failures=$((failures + 1))
+        if [[ -z "$next_step" ]]; then
+          next_step="Start container or rerun `sqlboot init`."
+        fi
+      fi
+    else
+      printf '  Oracle container: missing\n'
+      failures=$((failures + 1))
+      if [[ -z "$next_step" ]]; then
+        next_step="Run `sqlboot init`."
+      fi
+    fi
+  else
+    printf '  Oracle container: skipped\n'
+  fi
+
+  if (( failures > 0 )); then
+    printf '\nNext: %s\n' "$next_step" >&2
+    die "Doctor found ${failures} issue(s)."
+  fi
+
+  printf '\nAll good.\n'
+}
+
+reset_password() {
+  local new_password=${1:-}
+  [[ -n "$new_password" ]] || die "Usage: sqlboot reset-pwd <new-password>"
+
+  DETECT_OS_QUIET="1"
+  detect_os
+  require_docker_ready
+  container_exists || die "Container $ORACLE_CONTAINER does not exist."
+
+  log_info "Resetting Oracle password for $ORACLE_CONTAINER"
+  docker_cmd exec "$ORACLE_CONTAINER" resetPassword "$new_password"
+  log_ok "Oracle password reset complete"
+}
+
+stop_oracle_container() {
+  DETECT_OS_QUIET="1"
+  detect_os
+  require_docker_ready
+
+  if ! container_exists; then
+    log_ok "Container $ORACLE_CONTAINER does not exist"
+    return 0
+  fi
+
+  if ! container_is_running; then
+    log_ok "Container $ORACLE_CONTAINER is already stopped"
+    return 0
+  fi
+
+  log_info "Stopping container $ORACLE_CONTAINER"
+  docker_cmd stop "$ORACLE_CONTAINER" >/dev/null
+  log_ok "Container $ORACLE_CONTAINER stopped"
+}
+
 # -----------------------------
 # Installer flow
 # -----------------------------
@@ -650,16 +868,40 @@ run_install() {
   start_oracle_container
   wait_for_oracle_ready
 
-  printf '\nSetup complete.\nRun:\nsqlboot\n\nThen inside SQL*Plus:\nconn system/1234@XE\n'
+  printf '\nSetup complete.\nRun:\nsqlboot\n\nThen inside SQL*Plus:\nconn system/%s@XE\n' "$ORACLE_PASSWORD"
 }
 
 print_usage() {
   cat <<EOF
+sqlboot
+
+Bootstrap Oracle SQL*Plus workflow with Docker Oracle XE, Instant Client, rlwrap, and local helper commands.
+
 Usage:
-  sqlboot              Install when run from source; launch SQL*Plus when installed
-  sqlboot --install    Run installer
-  sqlboot --start      Start Docker Oracle XE and launch SQL*Plus
-  sqlboot --help       Show this help
+  sqlboot                 Show this help
+  sqlboot init            Run installer
+  sqlboot help            Show help
+  sqlboot status          Show current sqlboot status
+  sqlboot logs            Show Oracle container logs
+  sqlboot doctor          Run local environment checks
+  sqlboot reset-pwd <pw>  Reset Oracle password in running container
+  sqlboot stop            Stop Oracle container
+  sqlboot --install       Run installer (compat)
+  sqlboot --start         Launch SQL*Plus (compat)
+  sqlboot --help          Show this help
+
+Available options:
+  init                      Initialize sqlboot setup
+  help                      Show help
+  status                    Show current sqlboot status
+  logs                      Show recent Oracle container logs
+  doctor                    Run environment checks
+  stop                      Stop Oracle container
+  reset-pwd <new-password>  Reset Oracle password
+
+Authors:
+  Shoaib Taimur      https://taimur.dev
+  Toufiq Hasan Kiron https://kiron.dev
 
 Environment overrides:
   SQLBOOT_ORACLE_PASSWORD
@@ -674,21 +916,32 @@ EOF
 
 main() {
   case "${1:-}" in
-    --help|-h)
+    --help|-h|help)
       print_usage
       ;;
-    --install)
+    --install|init)
       run_install
       ;;
     --start)
       launch_sqlplus
       ;;
+    status)
+      show_status
+      ;;
+    logs)
+      show_logs
+      ;;
+    doctor)
+      run_doctor
+      ;;
+    reset-pwd)
+      reset_password "${2:-}"
+      ;;
+    stop)
+      stop_oracle_container
+      ;;
     "")
-      if [[ "$SQLBOOT_INSTALLED_MODE" == "1" ]]; then
-        launch_sqlplus
-      else
-        run_install
-      fi
+      print_usage
       ;;
     *)
       die "Unknown option: $1. Use --help for usage."

@@ -2,16 +2,14 @@ export const HELP_TEXT = `sqlboot
 
 Installs Oracle SQL*Plus, Docker Oracle XE, rlwrap, and the universal sqlboot command.
 
-Usage:
-  npx sqlboot
-  sqlboot
-  sqlboot --help
-
-After setup:
-  sqlboot
-
-Inside SQL*Plus:
-  conn system/1234@XE
+Available options:
+  init                      Initialize sqlboot setup
+  help                      Show this help
+  status                    Show current sqlboot status
+  logs                      Show recent Oracle container logs
+  doctor                    Run environment checks
+  stop                      Stop Oracle container
+  reset-pwd <new-password>  Reset Oracle password
 
 Environment overrides:
   SQLBOOT_ORACLE_PASSWORD

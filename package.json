@@ -1,16 +1,37 @@
 {
   "name": "sqlboot",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Cross-platform npm CLI for Oracle SQL*Plus, Docker Oracle XE, rlwrap, and the sqlboot command.",
+  "author": {
+    "name": "SQLBoot contributors",
+    "url": "https://github.com/InsightLabsIO/sqlboot"
+  },
+  "contributors": [
+    {
+      "name": "Shoaib Taimur",
+      "url": "https://taimur.dev"
+    },
+    {
+      "name": "Toufiq Hasan Kiron",
+      "url": "https://kiron.dev"
+    }
+  ],
   "license": "MIT",
+  "homepage": "https://sqlboot.js.org",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/InsightLabsIO/sqlboot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/InsightLabsIO/sqlboot/issues"
+  },
   "bin": {
-    "sqlboot": "dist/cli/index.js"
+    "sqlboot": "dist/index.js"
   },
   "files": [
     "dist/",
     "sqlboot",
     "README.md",
-    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
