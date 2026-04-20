@@ -58,6 +58,7 @@ LIB_PATH_VAR=""
 IC_BASIC_URL=""
 IC_SQLPLUS_URL=""
 DOCKER_PLATFORM_ARGS=()
+DETECT_OS_QUIET="0"
 
 # -----------------------------
 # Logging
@@ -167,7 +168,9 @@ detect_os() {
 
       if [[ "$OS_ARCH" == "arm64" ]]; then
         DOCKER_PLATFORM_ARGS=(--platform linux/amd64)
-        log_info "Apple Silicon detected. Docker will use linux/amd64 for Oracle XE."
+        if [[ "$DETECT_OS_QUIET" != "1" ]]; then
+          log_info "Apple Silicon detected. Docker will use linux/amd64 for Oracle XE."
+        fi
       elif [[ "$OS_ARCH" != "x86_64" ]]; then
         die "Unsupported macOS architecture: $OS_ARCH"
       fi
@@ -206,10 +209,12 @@ detect_os() {
       ;;
   esac
 
-  if [[ "$IS_WSL" == "1" ]]; then
-    log_ok "Detected $OS_TYPE ($OS_ARCH, WSL)"
-  else
-    log_ok "Detected $OS_TYPE ($OS_ARCH)"
+  if [[ "$DETECT_OS_QUIET" != "1" ]]; then
+    if [[ "$IS_WSL" == "1" ]]; then
+      log_ok "Detected $OS_TYPE ($OS_ARCH, WSL)"
+    else
+      log_ok "Detected $OS_TYPE ($OS_ARCH)"
+    fi
   fi
 }
 
@@ -426,7 +431,13 @@ require_docker_cli() {
 require_docker_ready() {
   require_docker_cli
   if ! docker_is_accessible; then
-    die "Docker is not reachable."
+    if [[ "$OS_TYPE" == "macos" ]]; then
+      die "Docker not running. Start Docker Desktop."
+    elif [[ "$IS_WSL" == "1" ]]; then
+      die "Docker not reachable in WSL. Start Docker Desktop, enable WSL integration."
+    else
+      die "Docker not running. Start Docker service."
+    fi
   fi
 }
 
@@ -654,6 +665,7 @@ launch_sqlplus() {
 }
 
 show_status() {
+  DETECT_OS_QUIET="1"
   detect_os
 
   printf 'Status\n'
@@ -703,6 +715,7 @@ show_status() {
 }
 
 show_logs() {
+  DETECT_OS_QUIET="1"
   detect_os
   require_docker_ready
   container_exists || die "Container $ORACLE_CONTAINER does not exist."
@@ -710,6 +723,7 @@ show_logs() {
 }
 
 run_doctor() {
+  DETECT_OS_QUIET="1"
   detect_os
 
   local failures=0
@@ -717,7 +731,6 @@ run_doctor() {
   spath="$(sqlplus_path)"
   local next_step=""
 
-  log_info "Running sqlboot doctor"
   printf 'Doctor\n'
   printf '  OS: %s (%s)\n' "$OS_TYPE" "$OS_ARCH"
 
@@ -809,6 +822,7 @@ reset_password() {
   local new_password=${1:-}
   [[ -n "$new_password" ]] || die "Usage: sqlboot reset-pwd <new-password>"
 
+  DETECT_OS_QUIET="1"
   detect_os
   require_docker_ready
   container_exists || die "Container $ORACLE_CONTAINER does not exist."
@@ -819,6 +833,7 @@ reset_password() {
 }
 
 stop_oracle_container() {
+  DETECT_OS_QUIET="1"
   detect_os
   require_docker_ready
 

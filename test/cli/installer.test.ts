@@ -15,9 +15,7 @@ describe('runCli installer checks', () => {
     const status = runCli(['init'], deps);
 
     expect(status).toBe(1);
-    expect(deps.stderr.write).toHaveBeenCalledWith(
-      '[ERROR] Bundled installer not found: /pkg/dist/sqlboot or /pkg/sqlboot\n'
-    );
+    expect(deps.stderr.write).toHaveBeenCalledWith('[ERROR] Bundled installer not found: /pkg/sqlboot or /sqlboot\n');
     expect(deps.fs.chmodSync).not.toHaveBeenCalled();
     expect(deps.spawnSync).not.toHaveBeenCalled();
   });
@@ -34,8 +32,7 @@ describe('runCli installer checks', () => {
     const status = runCli(['init'], deps);
 
     expect(status).toBe(0);
-    expect(existsSync).toHaveBeenNthCalledWith(1, '/pkg/dist/sqlboot');
-    expect(existsSync).toHaveBeenNthCalledWith(2, '/pkg/sqlboot');
+    expect(existsSync).toHaveBeenNthCalledWith(1, '/pkg/sqlboot');
     expect(deps.fs.chmodSync).toHaveBeenCalledWith('/pkg/sqlboot', 0o755);
   });
 

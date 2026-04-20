@@ -6,7 +6,7 @@ export function createCliDeps(
   overrides: Partial<Parameters<typeof runCli>[1]> = {}
 ): Parameters<typeof runCli>[1] {
   return {
-    argv: ['node', 'dist/cli/index.js'],
+    argv: ['node', 'dist/index.js'],
     platform: 'darwin',
     env: {},
     stdout: {
@@ -15,7 +15,7 @@ export function createCliDeps(
     stderr: {
       write: vi.fn()
     } as unknown as NodeJS.WriteStream,
-    installerDirname: '/pkg/dist/cli',
+    installerDirname: '/pkg/dist',
     fs: {
       existsSync: vi.fn((file: string) => file === '/pkg/sqlboot'),
       chmodSync: vi.fn()
