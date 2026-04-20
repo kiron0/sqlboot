@@ -14,16 +14,6 @@ describe('runCli help', () => {
     expect(deps.spawnSync).not.toHaveBeenCalled();
   });
 
-  it('prints help without spawning installer', () => {
-    const deps = createCliDeps();
-
-    const status = runCli(['--help'], deps);
-
-    expect(status).toBe(0);
-    expect(deps.stdout.write).toHaveBeenCalledOnce();
-    expect(deps.spawnSync).not.toHaveBeenCalled();
-  });
-
   it('forwards help subcommand to installer script', () => {
     const deps = createCliDeps();
 

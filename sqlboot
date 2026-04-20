@@ -6,10 +6,10 @@
 #
 # First run:
 #   chmod +x sqlboot
-#   ./sqlboot
+#   ./sqlboot init
 #
 # After setup:
-#   sqlboot
+#   sqlboot start
 #   SQL> conn system/1234@XE
 
 set -Eeuo pipefail
@@ -130,6 +130,52 @@ append_once() {
     printf '%s\n' "$block"
   } >>"$file"
   log_ok "Updated $file"
+}
+
+remove_between_markers() {
+  local file=$1
+  local start_marker=$2
+  local end_marker=$3
+
+  [[ -f "$file" ]] || return 0
+  if ! grep -Fq "$start_marker" "$file"; then
+    log_ok "No sqlboot environment block found in $file"
+    return 0
+  fi
+
+  local tmp_file
+  tmp_file="$(mktemp)"
+  awk -v start="$start_marker" -v end="$end_marker" '
+    $0 == start { skipping = 1; next }
+    $0 == end { skipping = 0; next }
+    !skipping { print }
+  ' "$file" >"$tmp_file"
+  mv "$tmp_file" "$file"
+  log_ok "Removed sqlboot environment block from $file"
+}
+
+remove_file_if_exists() {
+  local file=$1
+  if [[ -e "$file" || -L "$file" ]]; then
+    rm -f "$file"
+    log_ok "Removed $file"
+  else
+    log_ok "$file does not exist"
+  fi
+}
+
+remove_dir_if_exists() {
+  local dir=$1
+  if [[ -z "$dir" || "$dir" == "/" || "$dir" == "$HOME" ]]; then
+    die "Refusing to remove unsafe directory path: ${dir:-empty}"
+  fi
+
+  if [[ -d "$dir" ]]; then
+    rm -rf "$dir"
+    log_ok "Removed $dir"
+  else
+    log_ok "$dir does not exist"
+  fi
 }
 
 latest_instantclient_dir() {
@@ -652,7 +698,7 @@ launch_sqlplus() {
 
   local spath
   spath="$(sqlplus_path)"
-  [[ -n "$spath" ]] || die "sqlplus was not found. Run the installer again: ./sqlboot --install"
+  [[ -n "$spath" ]] || die "sqlplus was not found. Run the installer again: sqlboot init"
 
   export TNS_ADMIN="$TNS_ADMIN_DIR"
   export PATH="$(dirname "$spath"):$PATH"
@@ -852,6 +898,69 @@ stop_oracle_container() {
   log_ok "Container $ORACLE_CONTAINER stopped"
 }
 
+remove_oracle_container_and_image() {
+  if ! command_exists docker; then
+    log_ok "Docker CLI not found; skipping Oracle container and image cleanup"
+    return 0
+  fi
+
+  if ! docker_is_accessible; then
+    log_ok "Docker daemon is not reachable; skipping Oracle container and image cleanup"
+    return 0
+  fi
+
+  if container_exists; then
+    log_info "Removing container $ORACLE_CONTAINER"
+    docker_cmd rm -f "$ORACLE_CONTAINER" >/dev/null
+    log_ok "Removed container $ORACLE_CONTAINER"
+  else
+    log_ok "Container $ORACLE_CONTAINER does not exist"
+  fi
+
+  if docker_cmd image inspect "$ORACLE_IMAGE" >/dev/null 2>&1; then
+    log_info "Removing image $ORACLE_IMAGE"
+    if docker_cmd rmi "$ORACLE_IMAGE" >/dev/null 2>&1; then
+      log_ok "Removed image $ORACLE_IMAGE"
+    else
+      log_info "Kept image $ORACLE_IMAGE because it is still used by Docker"
+    fi
+  else
+    log_ok "Image $ORACLE_IMAGE does not exist"
+  fi
+}
+
+remove_launcher() {
+  if [[ -e "$INSTALL_PATH" || -L "$INSTALL_PATH" ]]; then
+    log_info "Removing sqlboot command from $INSTALL_PATH"
+    run_sudo rm -f "$INSTALL_PATH"
+    log_ok "Removed $INSTALL_PATH"
+  else
+    log_ok "$INSTALL_PATH does not exist"
+  fi
+}
+
+remove_environment() {
+  local marker="# >>> sqlboot environment >>>"
+  local end_marker="# <<< sqlboot environment <<<"
+  remove_between_markers "$PROFILE_FILE" "$marker" "$end_marker"
+}
+
+run_uninstall() {
+  DETECT_OS_QUIET="1"
+  detect_os
+
+  log_info "Removing sqlboot-managed resources"
+  remove_oracle_container_and_image
+  remove_dir_if_exists "$INSTANTCLIENT_PARENT"
+  rmdir "$ORACLE_BASE_DIR" 2>/dev/null || true
+  remove_file_if_exists "$SQLPLUS_HISTORY"
+  remove_environment
+  remove_launcher
+
+  log_info "Shared dependencies were left installed: Docker, curl, unzip, rlwrap, Homebrew, and apt packages."
+  printf '\nUninstall complete.\n'
+}
+
 # -----------------------------
 # Installer flow
 # -----------------------------
@@ -881,22 +990,23 @@ Usage:
   sqlboot                 Show this help
   sqlboot init            Run installer
   sqlboot help            Show help
+  sqlboot start           Launch SQL*Plus
   sqlboot status          Show current sqlboot status
   sqlboot logs            Show Oracle container logs
   sqlboot doctor          Run local environment checks
   sqlboot reset-pwd <pw>  Reset Oracle password in running container
   sqlboot stop            Stop Oracle container
-  sqlboot --install       Run installer (compat)
-  sqlboot --start         Launch SQL*Plus (compat)
-  sqlboot --help          Show this help
+  sqlboot uninstall       Remove sqlboot-managed resources
 
 Available options:
   init                      Initialize sqlboot setup
   help                      Show help
+  start                     Launch SQL*Plus
   status                    Show current sqlboot status
   logs                      Show recent Oracle container logs
   doctor                    Run environment checks
   stop                      Stop Oracle container
+  uninstall                 Remove container, image, Instant Client, env block, history, and launcher
   reset-pwd <new-password>  Reset Oracle password
 
 Authors:
@@ -914,37 +1024,70 @@ Environment overrides:
 EOF
 }
 
+invalid_command() {
+  die "Invalid command: $*. Use \"sqlboot help\" for usage."
+}
+
+require_no_extra_args() {
+  local command_name=$1
+  shift
+  if (( $# > 0 )); then
+    invalid_command "$command_name $*"
+  fi
+}
+
+require_exact_arg_count() {
+  local command_name=$1
+  local expected_count=$2
+  shift 2
+  if (( $# != expected_count )); then
+    invalid_command "$command_name $*"
+  fi
+}
+
 main() {
   case "${1:-}" in
-    --help|-h|help)
+    help)
+      require_no_extra_args "$1" "${@:2}"
       print_usage
       ;;
-    --install|init)
+    init)
+      require_no_extra_args "$1" "${@:2}"
       run_install
       ;;
-    --start)
+    start)
+      require_no_extra_args "$1" "${@:2}"
       launch_sqlplus
       ;;
     status)
+      require_no_extra_args "$1" "${@:2}"
       show_status
       ;;
     logs)
+      require_no_extra_args "$1" "${@:2}"
       show_logs
       ;;
     doctor)
+      require_no_extra_args "$1" "${@:2}"
       run_doctor
       ;;
     reset-pwd)
+      require_exact_arg_count "$1" 1 "${@:2}"
       reset_password "${2:-}"
       ;;
     stop)
+      require_no_extra_args "$1" "${@:2}"
       stop_oracle_container
+      ;;
+    uninstall)
+      require_no_extra_args "$1" "${@:2}"
+      run_uninstall
       ;;
     "")
       print_usage
       ;;
     *)
-      die "Unknown option: $1. Use --help for usage."
+      invalid_command "$@"
       ;;
   esac
 }

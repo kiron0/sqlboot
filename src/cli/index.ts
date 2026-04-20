@@ -11,30 +11,46 @@ import { ensureInstallerExecutable, getBash, resolveInstallerPath, supportedPlat
 import type { CliDeps } from '../types/cli';
 import { logError } from '../utils/logger';
 
-function getInstallerArgs(args: string[]): string[] {
-  if (args[0] === '--help' || args[0] === '-h' || args[0] === 'help') {
+const NO_ARG_COMMANDS = new Set(['status', 'logs', 'doctor', 'stop', 'uninstall']);
+
+function invalidCommand(args: string[], deps: CliDeps): null {
+  logError(`Invalid command: ${args.join(' ')}. Use "sqlboot help" for usage.`, deps.stderr);
+  return null;
+}
+
+function getInstallerArgs(args: string[], deps: CliDeps): string[] | null {
+  if (args[0] === 'help' && args.length === 1) {
     return ['help'];
   }
 
-  if (args[0] === '--install' || args[0] === 'install' || args[0] === 'init') {
-    return ['--install', ...args.slice(1)];
+  if (args[0] === 'init' && args.length === 1) {
+    return ['init'];
   }
 
-  if (args[0] === '--start' || args[0] === 'start') {
-    return ['--start', ...args.slice(1)];
+  if (args[0] === 'start' && args.length === 1) {
+    return ['start'];
   }
 
-  if (['status', 'logs', 'doctor', 'reset-pwd', 'stop'].includes(args[0])) {
+  if (NO_ARG_COMMANDS.has(args[0]) && args.length === 1) {
     return args;
   }
 
-  return ['--install', ...args];
+  if (args[0] === 'reset-pwd' && args.length === 2) {
+    return args;
+  }
+
+  return invalidCommand(args, deps);
 }
 
 export function runCli(args: string[], deps: CliDeps): number {
-  if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+  if (args.length === 0) {
     printHelp(deps.stdout);
     return 0;
+  }
+
+  const installerArgs = getInstallerArgs(args, deps);
+  if (!installerArgs) {
+    return 1;
   }
 
   if (!supportedPlatforms.has(deps.platform)) {
@@ -56,7 +72,7 @@ export function runCli(args: string[], deps: CliDeps): number {
     return 1;
   }
 
-  const result = deps.spawnSync(bash, [installerPath, ...getInstallerArgs(args)], {
+  const result = deps.spawnSync(bash, [installerPath, ...installerArgs], {
     stdio: 'inherit',
     env: deps.env
   });

@@ -2,6 +2,13 @@
 
 All notable changes to `sqlboot` are tracked here.
 
+## 1.0.5
+
+- Added `sqlboot uninstall` to remove sqlboot-managed resources.
+- Added strict command validation so invalid commands and extra arguments fail instead of defaulting to install.
+- Removed dashed sqlboot compatibility options; use plain commands like `sqlboot init`, `sqlboot start`, and `sqlboot help`.
+- Added Vitest coverage for uninstall command forwarding.
+
 ## 1.0.4
 
 - Switched CLI build pipeline to `tsup`.
@@ -9,7 +16,7 @@ All notable changes to `sqlboot` are tracked here.
 - Expanded npm package metadata with homepage, repository, issue tracker, author, and contributor details.
 - Rewrote README for richer npm-facing production documentation.
 - Added `help`, `status`, `logs`, `doctor`, `reset-pwd`, and `stop` commands.
-- Standardized init flow around `sqlboot init` while keeping internal flag compatibility.
+- Standardized init flow around `sqlboot init`.
 
 ## 1.0.3
 

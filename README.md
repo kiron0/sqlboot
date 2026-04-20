@@ -18,7 +18,6 @@ It installs required OS packages, prepares Oracle Instant Client, starts Oracle 
 Run installer directly from npm:
 
 ```sh
-npx sqlboot
 npx sqlboot init
 npx sqlboot help
 ```
@@ -26,7 +25,7 @@ npx sqlboot help
 After setup completes:
 
 ```sh
-sqlboot
+sqlboot start
 ```
 
 Inside SQL*Plus:
@@ -49,6 +48,18 @@ conn system/1234@XE
 - exports SQL*Plus env vars in shell profile
 - enables persistent SQL history with `rlwrap`
 - installs `/usr/local/bin/sqlboot`
+
+## Uninstall
+
+Remove sqlboot-managed resources:
+
+```sh
+sqlboot uninstall
+```
+
+This removes the Oracle XE container and image, Oracle Instant Client files, generated shell environment block, SQL*Plus history file, and `/usr/local/bin/sqlboot`.
+
+Shared system dependencies are left installed because they may be used outside sqlboot: Docker, Homebrew, `curl`, `unzip`, `rlwrap`, and apt packages.
 
 ## Supported platforms
 
@@ -77,7 +88,7 @@ Native Windows PowerShell and CMD not supported.
 Override defaults with env vars before install:
 
 ```sh
-SQLBOOT_ORACLE_PASSWORD='new-password' npx sqlboot
+SQLBOOT_ORACLE_PASSWORD='new-password' npx sqlboot init
 ```
 
 Available env vars:
@@ -102,25 +113,25 @@ SQLBOOT_SQLPLUS_HISTORY
 Use different port:
 
 ```sh
-SQLBOOT_ORACLE_PORT=1522 npx sqlboot
+SQLBOOT_ORACLE_PORT=1522 npx sqlboot init
 ```
 
 Use different password:
 
 ```sh
-SQLBOOT_ORACLE_PASSWORD='super-secret' npx sqlboot
+SQLBOOT_ORACLE_PASSWORD='super-secret' npx sqlboot init
 ```
 
 Use different Oracle image:
 
 ```sh
-SQLBOOT_ORACLE_IMAGE='gvenzl/oracle-xe:21-full' npx sqlboot
+SQLBOOT_ORACLE_IMAGE='gvenzl/oracle-xe:21-full' npx sqlboot init
 ```
 
 Launch SQL*Plus later:
 
 ```sh
-sqlboot
+sqlboot start
 ```
 
 Useful commands:
@@ -132,6 +143,7 @@ sqlboot logs
 sqlboot doctor
 sqlboot stop
 sqlboot reset-pwd <new-password>
+sqlboot uninstall
 ```
 
 ## Windows with WSL2
@@ -151,7 +163,7 @@ Settings > Resources > WSL integration
 Open Ubuntu terminal, run:
 
 ```sh
-npx sqlboot
+npx sqlboot init
 ```
 
 Do not run `sqlboot` from native PowerShell or CMD.

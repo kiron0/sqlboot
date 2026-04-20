@@ -4,67 +4,27 @@ import { runCli } from '../../src/cli';
 import { createCliDeps } from '../helpers/create-cli-deps';
 
 describe('runCli spawn', () => {
-  it('spawns bundled installer with install flag', () => {
-    const spawn = vi.fn(() => ({ status: 0, output: [], pid: 1, signal: null, stderr: null, stdout: null }));
-    const deps = createCliDeps({ spawnSync: spawn });
-
-    const status = runCli(['--flag'], deps);
-
-    expect(status).toBe(0);
-    expect(deps.fs.chmodSync).toHaveBeenCalledWith('/pkg/sqlboot', 0o755);
-    expect(spawn).toHaveBeenCalledWith('bash', ['/pkg/sqlboot', '--install', '--flag'], {
-      stdio: 'inherit',
-      env: {}
-    });
-  });
-
-  it('forwards explicit start mode without forcing install', () => {
-    const spawn = vi.fn(() => ({ status: 0, output: [], pid: 1, signal: null, stderr: null, stdout: null }));
-    const deps = createCliDeps({ spawnSync: spawn });
-
-    const status = runCli(['--start'], deps);
-
-    expect(status).toBe(0);
-    expect(spawn).toHaveBeenCalledWith('bash', ['/pkg/sqlboot', '--start'], {
-      stdio: 'inherit',
-      env: {}
-    });
-  });
-
-  it('forwards explicit install mode without duplication', () => {
-    const spawn = vi.fn(() => ({ status: 0, output: [], pid: 1, signal: null, stderr: null, stdout: null }));
-    const deps = createCliDeps({ spawnSync: spawn });
-
-    const status = runCli(['--install'], deps);
-
-    expect(status).toBe(0);
-    expect(spawn).toHaveBeenCalledWith('bash', ['/pkg/sqlboot', '--install'], {
-      stdio: 'inherit',
-      env: {}
-    });
-  });
-
-  it('maps init alias to install mode', () => {
+  it('forwards init command', () => {
     const spawn = vi.fn(() => ({ status: 0, output: [], pid: 1, signal: null, stderr: null, stdout: null }));
     const deps = createCliDeps({ spawnSync: spawn });
 
     const status = runCli(['init'], deps);
 
     expect(status).toBe(0);
-    expect(spawn).toHaveBeenCalledWith('bash', ['/pkg/sqlboot', '--install'], {
+    expect(spawn).toHaveBeenCalledWith('bash', ['/pkg/sqlboot', 'init'], {
       stdio: 'inherit',
       env: {}
     });
   });
 
-  it('maps start alias to start mode', () => {
+  it('forwards start command', () => {
     const spawn = vi.fn(() => ({ status: 0, output: [], pid: 1, signal: null, stderr: null, stdout: null }));
     const deps = createCliDeps({ spawnSync: spawn });
 
     const status = runCli(['start'], deps);
 
     expect(status).toBe(0);
-    expect(spawn).toHaveBeenCalledWith('bash', ['/pkg/sqlboot', '--start'], {
+    expect(spawn).toHaveBeenCalledWith('bash', ['/pkg/sqlboot', 'start'], {
       stdio: 'inherit',
       env: {}
     });

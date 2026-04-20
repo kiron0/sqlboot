@@ -5,10 +5,12 @@ Installs Oracle SQL*Plus, Docker Oracle XE, rlwrap, and the universal sqlboot co
 Available options:
   init                      Initialize sqlboot setup
   help                      Show this help
+  start                     Launch SQL*Plus
   status                    Show current sqlboot status
   logs                      Show recent Oracle container logs
   doctor                    Run environment checks
   stop                      Stop Oracle container
+  uninstall                 Remove sqlboot-managed resources
   reset-pwd <new-password>  Reset Oracle password
 
 Environment overrides:
