@@ -6,16 +6,23 @@ import { logError } from '../utils/logger';
 
 export const supportedPlatforms = SUPPORTED_PLATFORMS;
 
-export function getInstallerPath(installerDirname: string): string {
-  return path.resolve(installerDirname, '..', 'sqlboot');
+export function resolveInstallerPath(deps: CliDeps): string | null {
+  const candidates = [
+    path.resolve(deps.installerDirname, '..', 'sqlboot'),
+    path.resolve(deps.installerDirname, '..', '..', 'sqlboot')
+  ];
+
+  for (const candidate of candidates) {
+    if (deps.fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  logError(`Bundled installer not found: ${candidates.join(' or ')}`, deps.stderr);
+  return null;
 }
 
 export function ensureInstallerExecutable(deps: CliDeps, installerPath: string): boolean {
-  if (!deps.fs.existsSync(installerPath)) {
-    logError(`Bundled installer not found: ${installerPath}`, deps.stderr);
-    return false;
-  }
-
   try {
     deps.fs.chmodSync(installerPath, INSTALLER_EXECUTABLE_MODE);
     return true;

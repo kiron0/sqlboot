@@ -12,12 +12,31 @@ describe('runCli installer checks', () => {
       }
     });
 
-    const status = runCli([], deps);
+    const status = runCli(['init'], deps);
 
     expect(status).toBe(1);
-    expect(deps.stderr.write).toHaveBeenCalledWith('[ERROR] Bundled installer not found: /pkg/sqlboot\n');
+    expect(deps.stderr.write).toHaveBeenCalledWith(
+      '[ERROR] Bundled installer not found: /pkg/dist/sqlboot or /pkg/sqlboot\n'
+    );
     expect(deps.fs.chmodSync).not.toHaveBeenCalled();
     expect(deps.spawnSync).not.toHaveBeenCalled();
+  });
+
+  it('finds installer at package root when running from dist', () => {
+    const existsSync = vi.fn((file: string) => file === '/pkg/sqlboot');
+    const deps = createCliDeps({
+      fs: {
+        existsSync,
+        chmodSync: vi.fn()
+      }
+    });
+
+    const status = runCli(['init'], deps);
+
+    expect(status).toBe(0);
+    expect(existsSync).toHaveBeenNthCalledWith(1, '/pkg/dist/sqlboot');
+    expect(existsSync).toHaveBeenNthCalledWith(2, '/pkg/sqlboot');
+    expect(deps.fs.chmodSync).toHaveBeenCalledWith('/pkg/sqlboot', 0o755);
   });
 
   it('fails when chmod throws', () => {
@@ -30,7 +49,7 @@ describe('runCli installer checks', () => {
       }
     });
 
-    const status = runCli([], deps);
+    const status = runCli(['init'], deps);
 
     expect(status).toBe(1);
     expect(deps.stderr.write).toHaveBeenCalledWith('[ERROR] Unable to mark installer executable: nope\n');

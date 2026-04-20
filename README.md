@@ -19,6 +19,8 @@ Run installer directly from npm:
 
 ```sh
 npx sqlboot
+npx sqlboot init
+npx sqlboot help
 ```
 
 After setup completes:
@@ -119,6 +121,17 @@ Launch SQL*Plus later:
 
 ```sh
 sqlboot
+```
+
+Useful commands:
+
+```sh
+sqlboot help
+sqlboot status
+sqlboot logs
+sqlboot doctor
+sqlboot stop
+sqlboot reset-pwd <new-password>
 ```
 
 ## Windows with WSL2

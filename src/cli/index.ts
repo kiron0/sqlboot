@@ -7,12 +7,32 @@ import fs from 'node:fs';
 import os from 'node:os';
 
 import { printHelp } from '../helpers/help';
-import { ensureInstallerExecutable, getBash, getInstallerPath, supportedPlatforms } from '../helpers/installer';
+import { ensureInstallerExecutable, getBash, resolveInstallerPath, supportedPlatforms } from '../helpers/installer';
 import type { CliDeps } from '../types/cli';
 import { logError } from '../utils/logger';
 
+function getInstallerArgs(args: string[]): string[] {
+  if (args[0] === '--help' || args[0] === '-h' || args[0] === 'help') {
+    return ['help'];
+  }
+
+  if (args[0] === '--install' || args[0] === 'install' || args[0] === 'init') {
+    return ['--install', ...args.slice(1)];
+  }
+
+  if (args[0] === '--start' || args[0] === 'start') {
+    return ['--start', ...args.slice(1)];
+  }
+
+  if (['status', 'logs', 'doctor', 'reset-pwd', 'stop'].includes(args[0])) {
+    return args;
+  }
+
+  return ['--install', ...args];
+}
+
 export function runCli(args: string[], deps: CliDeps): number {
-  if (args.includes('--help') || args.includes('-h')) {
+  if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
     printHelp(deps.stdout);
     return 0;
   }
@@ -22,7 +42,11 @@ export function runCli(args: string[], deps: CliDeps): number {
     return 1;
   }
 
-  const installerPath = getInstallerPath(deps.installerDirname);
+  const installerPath = resolveInstallerPath(deps);
+  if (!installerPath) {
+    return 1;
+  }
+
   if (!ensureInstallerExecutable(deps, installerPath)) {
     return 1;
   }
@@ -32,7 +56,7 @@ export function runCli(args: string[], deps: CliDeps): number {
     return 1;
   }
 
-  const result = deps.spawnSync(bash, [installerPath, '--install', ...args], {
+  const result = deps.spawnSync(bash, [installerPath, ...getInstallerArgs(args)], {
     stdio: 'inherit',
     env: deps.env
   });

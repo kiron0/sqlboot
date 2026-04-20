@@ -26,7 +26,7 @@
     "url": "https://github.com/InsightLabsIO/sqlboot/issues"
   },
   "bin": {
-    "sqlboot": "dist/cli/index.js"
+    "sqlboot": "dist/index.js"
   },
   "files": [
     "dist/",
