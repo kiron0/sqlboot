@@ -1,34 +1,27 @@
 # sqlboot
 
-`sqlboot` sets up a local Oracle SQL*Plus workflow on macOS, Ubuntu-based Linux, and Windows through WSL2 Ubuntu.
+`sqlboot` bootstraps Oracle SQL*Plus on local machine with one command.
 
-It installs the required tools, starts an Oracle XE Docker container, configures SQL*Plus, and gives you one command:
+It installs required OS packages, prepares Oracle Instant Client, starts Oracle XE in Docker, writes `tnsnames.ora`, enables `rlwrap` history, then installs global `sqlboot` launcher.
 
-```sh
-sqlboot
-```
+## Why sqlboot
 
-## What It Does
-
-- Installs `curl`, `unzip`, and `rlwrap`.
-- Installs Docker Desktop on macOS or `docker.io` on Ubuntu-based Linux.
-- Uses Docker Desktop WSL integration on Windows through WSL2.
-- Pulls `gvenzl/oracle-xe:21-slim`.
-- Creates and starts an `oracle-xe` container on port `1521`.
-- Downloads Oracle Instant Client and SQL*Plus.
-- Creates `~/oracle/instantclient/network/admin/tnsnames.ora`.
-- Adds the `XE` connection alias for `XEPDB1`.
-- Adds SQL*Plus environment variables to `~/.zshrc` on macOS or `~/.bashrc` on Linux.
-- Enables persistent SQL*Plus command history with `rlwrap`.
-- Installs `/usr/local/bin/sqlboot`.
+- One-step Oracle SQL*Plus setup for macOS, Ubuntu-based Linux, Zorin OS, WSL2 Ubuntu
+- Docker Oracle XE container with sane defaults
+- Oracle Instant Client + SQL*Plus download and shell wiring
+- Persistent SQL*Plus history through `rlwrap`
+- Generated `XE` alias for fast local connect flow
+- Repeatable local setup without manual Oracle client docs chase
 
 ## Install
+
+Run installer directly from npm:
 
 ```sh
 npx sqlboot
 ```
 
-After setup finishes, run:
+After setup completes:
 
 ```sh
 sqlboot
@@ -40,36 +33,29 @@ Inside SQL*Plus:
 conn system/1234@XE
 ```
 
-## Supported Systems
+## What sqlboot sets up
 
-- macOS with zsh and Homebrew
+`sqlboot` handles all of this:
+
+- installs `curl`, `unzip`, `rlwrap`
+- installs Docker Desktop on macOS or `docker.io` on Ubuntu-based Linux
+- uses Docker Desktop WSL integration on WSL2 Ubuntu
+- pulls `gvenzl/oracle-xe:21-slim`
+- creates and starts `oracle-xe` container
+- downloads Oracle Instant Client and SQL*Plus
+- writes `~/oracle/instantclient/network/admin/tnsnames.ora`
+- exports SQL*Plus env vars in shell profile
+- enables persistent SQL history with `rlwrap`
+- installs `/usr/local/bin/sqlboot`
+
+## Supported platforms
+
+- macOS
 - Ubuntu-based Linux
 - Zorin OS
 - Windows through WSL2 Ubuntu
 
-Native Windows PowerShell/CMD is not supported.
-
-## Windows
-
-Use WSL2 with Ubuntu:
-
-```powershell
-wsl --install
-```
-
-Install Docker Desktop for Windows, then enable WSL integration:
-
-```text
-Docker Desktop > Settings > Resources > WSL integration
-```
-
-Open Ubuntu/WSL and run:
-
-```sh
-npx sqlboot
-```
-
-Do not run `sqlboot` from native PowerShell or CMD.
+Native Windows PowerShell and CMD not supported.
 
 ## Defaults
 
@@ -86,13 +72,13 @@ Do not run `sqlboot` from native PowerShell or CMD.
 
 ## Configuration
 
-Set environment variables before running the installer:
+Override defaults with env vars before install:
 
 ```sh
 SQLBOOT_ORACLE_PASSWORD='new-password' npx sqlboot
 ```
 
-Available options:
+Available env vars:
 
 ```sh
 SQLBOOT_ORACLE_PASSWORD
@@ -104,35 +90,62 @@ SQLBOOT_IC_BASIC_URL
 SQLBOOT_IC_SQLPLUS_URL
 SQLBOOT_READY_TIMEOUT_SECONDS
 SQLBOOT_DOCKER_READY_TIMEOUT_SECONDS
+SQLBOOT_ORACLE_BASE_DIR
+SQLBOOT_INSTANTCLIENT_PARENT
+SQLBOOT_SQLPLUS_HISTORY
 ```
 
-## Real-World Notes
+## Common workflows
 
-If the `oracle-xe` container already exists, Docker keeps the original database files. Changing `SQLBOOT_ORACLE_PASSWORD` later does not change the existing database password.
-
-To reset the password for an existing container:
-
-```sh
-docker exec oracle-xe resetPassword new-password
-```
-
-If port `1521` is already in use, choose another host port:
+Use different port:
 
 ```sh
 SQLBOOT_ORACLE_PORT=1522 npx sqlboot
 ```
 
-Then connect with the generated `XE` alias, or update `tnsnames.ora` if needed.
+Use different password:
 
-On Linux, you may need to log out and back in after Docker is installed so your user can access the Docker socket without `sudo`.
+```sh
+SQLBOOT_ORACLE_PASSWORD='super-secret' npx sqlboot
+```
 
-On Windows through WSL2, Docker is managed by Docker Desktop. `sqlboot` will not install or start Docker Engine with `systemctl` inside WSL.
+Use different Oracle image:
 
-On macOS, Docker Desktop may require first-run setup before the installer can continue.
+```sh
+SQLBOOT_ORACLE_IMAGE='gvenzl/oracle-xe:21-full' npx sqlboot
+```
+
+Launch SQL*Plus later:
+
+```sh
+sqlboot
+```
+
+## Windows with WSL2
+
+Install WSL2 Ubuntu:
+
+```powershell
+wsl --install
+```
+
+Then in Docker Desktop enable:
+
+```text
+Settings > Resources > WSL integration
+```
+
+Open Ubuntu terminal, run:
+
+```sh
+npx sqlboot
+```
+
+Do not run `sqlboot` from native PowerShell or CMD.
 
 ## Troubleshooting
 
-Check the container:
+Check container:
 
 ```sh
 docker ps -a --filter name=oracle-xe
@@ -144,25 +157,28 @@ Check recent Oracle logs:
 docker logs --tail 120 oracle-xe
 ```
 
-Restart the container:
+Restart container:
 
 ```sh
 docker restart oracle-xe
 ```
 
-If `sqlboot` waits at `Waiting for Oracle XE to be ready`, make sure the container is still running and has enough memory. Oracle XE can be slow on machines with low RAM or heavy swapping.
+Reset existing Oracle password:
 
-If `npx sqlboot` keeps using an older version:
+```sh
+docker exec oracle-xe resetPassword new-password
+```
+
+If `sqlboot` waits too long for Oracle XE:
+
+- confirm container still running
+- confirm Docker has enough memory
+- check logs for startup or disk errors
+
+If Docker was newly installed on Linux, log out and back in before retrying so user can access Docker socket without `sudo`.
+
+If `npx` keeps resolving older release:
 
 ```sh
 npx sqlboot@latest
 ```
-
-## Development
-
-```sh
-npm run check
-npm run pack:dry
-```
-
-See [CHANGELOG.md](CHANGELOG.md) for version history.

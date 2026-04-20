@@ -2,6 +2,13 @@
 
 All notable changes to `sqlboot` are tracked here.
 
+## 1.0.4
+
+- Switched CLI build pipeline to `tsup`.
+- Added bundled `dist/cli/index.js` output with `terser` minification.
+- Expanded npm package metadata with homepage, repository, issue tracker, author, and contributor details.
+- Rewrote README for richer npm-facing production documentation.
+
 ## 1.0.3
 
 - Converted npm CLI entrypoint from JavaScript to TypeScript without changing runtime behavior.
