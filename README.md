@@ -2,6 +2,8 @@
 
 `sqlboot` bootstraps Oracle SQL*Plus on local machine with one command.
 
+Live site: https://sqlboot.js.org
+
 It installs required OS packages, prepares Oracle Instant Client, starts Oracle XE in Docker, writes `tnsnames.ora`, enables `rlwrap` history, then installs global `sqlboot` launcher.
 
 ## Why sqlboot
