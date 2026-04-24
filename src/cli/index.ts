@@ -7,7 +7,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 
 import { printHelp } from '../helpers/help';
-import { ensureInstallerExecutable, getBash, resolveInstallerPath, supportedPlatforms } from '../helpers/installer';
+import {
+  ensureInstallerExecutable,
+  getBash,
+  resolveInstallerPath,
+  resolveWindowsBootstrapperPath,
+  supportedPlatforms
+} from '../helpers/installer';
 import type { CliDeps } from '../types/cli';
 import { logError } from '../utils/logger';
 
@@ -35,6 +41,10 @@ function getInstallerArgs(args: string[], deps: CliDeps): string[] | null {
     return args;
   }
 
+  if (args[0] === 'uninstall' && args[1] === '--purge' && args.length === 2) {
+    return args;
+  }
+
   if (args[0] === 'reset-pwd' && args.length === 2) {
     return args;
   }
@@ -54,7 +64,7 @@ export function runCli(args: string[], deps: CliDeps): number {
   }
 
   if (!supportedPlatforms.has(deps.platform)) {
-    logError(`Unsupported platform: ${deps.platform}. sqlboot supports macOS and Linux.`, deps.stderr);
+    logError(`Unsupported platform: ${deps.platform}. sqlboot supports macOS, Linux, and Windows through WSL2 Ubuntu.`, deps.stderr);
     return 1;
   }
 
@@ -65,6 +75,41 @@ export function runCli(args: string[], deps: CliDeps): number {
 
   if (!ensureInstallerExecutable(deps, installerPath)) {
     return 1;
+  }
+
+  if (deps.platform === 'win32') {
+    const windowsBootstrapperPath = resolveWindowsBootstrapperPath(deps);
+    if (!windowsBootstrapperPath) {
+      return 1;
+    }
+
+    const windowsArgs = [
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      windowsBootstrapperPath,
+      '-InstallerPath',
+      installerPath,
+      '-CommandName',
+      installerArgs[0]
+    ];
+
+    if (installerArgs.length > 1) {
+      windowsArgs.push('-CommandArgs', ...installerArgs.slice(1));
+    }
+
+    const result = deps.spawnSync('powershell.exe', windowsArgs, {
+      stdio: 'inherit',
+      env: deps.env
+    });
+
+    if (result.error) {
+      logError(result.error.message, deps.stderr);
+      return 1;
+    }
+
+    return result.status ?? 1;
   }
 
   const bash = getBash(deps.os.platform(), deps.stderr);

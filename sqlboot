@@ -303,11 +303,139 @@ install_packages_linux() {
   log_info "Installing required Linux packages"
   run_sudo apt-get update
   run_sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y curl unzip rlwrap ca-certificates
-  if ! dpkg -s libaio1 >/dev/null 2>&1 && ! dpkg -s libaio1t64 >/dev/null 2>&1; then
-    run_sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y libaio1 || \
-      run_sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y libaio1t64
-  fi
+  install_libaio_package
+  ensure_libaio_runtime
+  run_sudo apt-get clean
   log_ok "Required Linux packages are available"
+}
+
+install_libaio_package() {
+  if dpkg -s libaio1 >/dev/null 2>&1 || dpkg -s libaio1t64 >/dev/null 2>&1 || dpkg -s libaio-dev >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local package_name
+  for package_name in libaio1t64 libaio1 libaio-dev; do
+    if apt-cache show "$package_name" >/dev/null 2>&1 && run_sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "$package_name"; then
+      return 0
+    fi
+  done
+
+  if command_exists add-apt-repository; then
+    run_sudo add-apt-repository -y universe || true
+  else
+    run_sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common && \
+      run_sudo add-apt-repository -y universe || true
+  fi
+
+  if [[ -d /etc/apt/sources.list.d ]]; then
+    local source_file
+    for source_file in /etc/apt/sources.list.d/*.sources; do
+      [[ -f "$source_file" ]] || continue
+      if grep -q '^Components:' "$source_file" && ! grep -q '^Components:.*universe' "$source_file"; then
+        run_sudo sed -i 's/^Components: \(.*\)$/Components: \1 universe/' "$source_file"
+      fi
+    done
+  fi
+
+  run_sudo apt-get update
+  for package_name in libaio1t64 libaio1 libaio-dev; do
+    if apt-cache show "$package_name" >/dev/null 2>&1 && run_sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "$package_name"; then
+      return 0
+    fi
+  done
+
+  local arch
+  arch="$(dpkg --print-architecture 2>/dev/null || true)"
+  if [[ "$arch" == "amd64" ]]; then
+    local tmp_deb
+    tmp_deb="$(mktemp)"
+    local deb_url="https://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/libaio1t64_0.3.113-8build1_amd64.deb"
+    if command_exists curl && curl -fL --retry 3 -o "$tmp_deb" "$deb_url" && run_sudo dpkg -i "$tmp_deb"; then
+      rm -f "$tmp_deb"
+      return 0
+    fi
+    rm -f "$tmp_deb"
+  fi
+
+  return 1
+}
+
+libaio_runtime_available() {
+  local spath=${1:-}
+
+  if [[ -n "$spath" && -x "$spath" ]]; then
+    if LD_LIBRARY_PATH="$(dirname "$spath"):${LD_LIBRARY_PATH:-}" ldd "$spath" 2>/dev/null | grep -Fq 'libaio.so.1 => not found'; then
+      return 1
+    fi
+    return 0
+  fi
+
+  ldconfig -p 2>/dev/null | grep -Fq 'libaio.so.1'
+}
+
+ensure_libaio_runtime() {
+  [[ "$OS_TYPE" == "linux" ]] || return 0
+
+  local spath
+  spath="$(sqlplus_path || true)"
+
+  if libaio_runtime_available "$spath"; then
+    return 0
+  fi
+
+  require_command apt-get
+  log_info "Installing SQL*Plus runtime dependency libaio"
+  run_sudo apt-get update
+  install_libaio_package || true
+  run_sudo apt-get clean
+
+  if libaio_runtime_available "$spath"; then
+    return 0
+  fi
+
+  local libaio_candidate
+  libaio_candidate="$(find /usr/lib /lib -type f \( -name 'libaio.so.1*' -o -name 'libaio.so.*' \) -print 2>/dev/null | sort | head -n 1 || true)"
+  if [[ -z "$libaio_candidate" ]]; then
+    local arch
+    arch="$(dpkg --print-architecture 2>/dev/null || true)"
+    if [[ "$arch" == "amd64" ]]; then
+      local tmp_dir
+      tmp_dir="$(mktemp -d)"
+      local deb_path="$tmp_dir/libaio.deb"
+      local deb_url
+      for deb_url in \
+        "https://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/libaio1t64_0.3.113-8build1_amd64.deb" \
+        "https://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/libaio1_0.3.113-8_amd64.deb" \
+        "https://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb" \
+        "https://deb.debian.org/debian/pool/main/liba/libaio/libaio1_0.3.113-4_amd64.deb"
+      do
+        rm -f "$deb_path"
+        if command_exists curl && curl -fL --retry 3 -o "$deb_path" "$deb_url"; then
+          rm -rf "$tmp_dir/extract"
+          mkdir -p "$tmp_dir/extract"
+          dpkg-deb -x "$deb_path" "$tmp_dir/extract" || true
+          libaio_candidate="$(find "$tmp_dir/extract" -type f \( -name 'libaio.so.1*' -o -name 'libaio.so.*' \) -print 2>/dev/null | sort | head -n 1 || true)"
+          [[ -n "$libaio_candidate" ]] && break
+        fi
+      done
+      if [[ -n "$libaio_candidate" ]]; then
+        run_sudo cp "$libaio_candidate" /usr/local/lib/libaio.so.1
+        libaio_candidate="/usr/local/lib/libaio.so.1"
+      fi
+      rm -rf "$tmp_dir"
+    fi
+  fi
+  if [[ -n "$libaio_candidate" ]]; then
+    log_info "Linking SQL*Plus runtime dependency libaio.so.1"
+    run_sudo ln -sf "$libaio_candidate" /usr/local/lib/libaio.so.1
+    if [[ -n "$spath" ]]; then
+      run_sudo ln -sf "$libaio_candidate" "$(dirname "$spath")/libaio.so.1"
+    fi
+    run_sudo ldconfig
+  fi
+
+  libaio_runtime_available "$spath" || die "SQL*Plus runtime dependency libaio.so.1 is missing. Install libaio1 or libaio1t64, then rerun sqlboot start."
 }
 
 install_required_packages() {
@@ -610,6 +738,7 @@ install_instant_client() {
     chmod +x "$ic_dir/sqlplus" || true
   fi
 
+  rm -rf "$tmp_dir"
   log_ok "SQL*Plus installed at $ic_dir/sqlplus"
 }
 
@@ -692,6 +821,7 @@ SQLBOOT_INSTALLED_MODE="0"
 
 launch_sqlplus() {
   detect_os
+  ensure_libaio_runtime
   ensure_docker_running
   start_oracle_container
   wait_for_oracle_ready
@@ -946,6 +1076,11 @@ remove_environment() {
 }
 
 run_uninstall() {
+  local purge_flag=${1:-}
+  if [[ -n "$purge_flag" && "$purge_flag" != "--purge" ]]; then
+    invalid_command "uninstall $purge_flag"
+  fi
+
   DETECT_OS_QUIET="1"
   detect_os
 
@@ -958,6 +1093,9 @@ run_uninstall() {
   remove_launcher
 
   log_info "Shared dependencies were left installed: Docker, curl, unzip, rlwrap, Homebrew, and apt packages."
+  if [[ "$purge_flag" == "--purge" ]]; then
+    log_info "Purge removes Windows-side Docker Desktop and WSL only when run from native Windows."
+  fi
   printf '\nUninstall complete.\n'
 }
 
@@ -997,6 +1135,8 @@ Usage:
   sqlboot reset-pwd <pw>  Reset Oracle password in running container
   sqlboot stop            Stop Oracle container
   sqlboot uninstall       Remove sqlboot-managed resources
+  sqlboot uninstall --purge
+                         Also remove Windows-side sqlboot setup when run from Windows
 
 Available options:
   init                      Initialize sqlboot setup
@@ -1080,8 +1220,10 @@ main() {
       stop_oracle_container
       ;;
     uninstall)
-      require_no_extra_args "$1" "${@:2}"
-      run_uninstall
+      if (( $# > 2 )) || { (( $# == 2 )) && [[ "${2:-}" != "--purge" ]]; }; then
+        invalid_command "$@"
+      fi
+      run_uninstall "${2:-}"
       ;;
     "")
       print_usage

@@ -8,7 +8,7 @@ It installs required OS packages, prepares Oracle Instant Client, starts Oracle 
 
 ## Why sqlboot
 
-- One-step Oracle SQL*Plus setup for macOS, Ubuntu-based Linux, Zorin OS, WSL2 Ubuntu
+- One-step Oracle SQL*Plus setup for macOS, Ubuntu-based Linux, Zorin OS, WSL2 Ubuntu, and Windows hosts through WSL2 Ubuntu
 - Docker Oracle XE container with sane defaults
 - Oracle Instant Client + SQL*Plus download and shell wiring
 - Persistent SQL*Plus history through `rlwrap`
@@ -63,6 +63,14 @@ This removes the Oracle XE container and image, Oracle Instant Client files, gen
 
 Shared system dependencies are left installed because they may be used outside sqlboot: Docker, Homebrew, `curl`, `unzip`, `rlwrap`, and apt packages.
 
+On Windows, remove the sqlboot-managed Windows setup too:
+
+```powershell
+sqlboot uninstall --purge
+```
+
+Purge first runs the normal WSL uninstall, then removes Docker Desktop, unregisters the Ubuntu WSL distro used by sqlboot, removes Ubuntu/WSL app packages where Windows exposes them, cleans sqlboot's Docker Desktop WSL integration setting, removes the current Windows user from `docker-users`, and disables the Windows WSL optional features. Windows may require a restart afterward.
+
 ## Supported platforms
 
 - macOS
@@ -70,7 +78,13 @@ Shared system dependencies are left installed because they may be used outside s
 - Zorin OS
 - Windows through WSL2 Ubuntu
 
-Native Windows PowerShell and CMD not supported.
+On Windows, run the npm CLI from PowerShell, Windows Terminal, or CMD:
+
+```powershell
+npx sqlboot init
+```
+
+The Windows bootstrapper installs or starts WSL2 Ubuntu and Docker Desktop when possible, then runs the Linux setup inside WSL. Windows may ask for administrator approval, Ubuntu may ask you to create the first Linux user, and Docker Desktop may ask for first-run confirmation.
 
 ## Defaults
 
@@ -150,25 +164,29 @@ sqlboot uninstall
 
 ## Windows with WSL2
 
-Install WSL2 Ubuntu:
+From Windows:
 
 ```powershell
-wsl --install
+npx sqlboot init
 ```
 
-Then in Docker Desktop enable:
+If Docker Desktop asks for WSL integration, enable:
 
 ```text
 Settings > Resources > WSL integration
 ```
 
-Open Ubuntu terminal, run:
+After setup completes, you can launch from Windows:
 
-```sh
-npx sqlboot init
+```powershell
+npx sqlboot start
 ```
 
-Do not run `sqlboot` from native PowerShell or CMD.
+Or from Ubuntu/WSL:
+
+```sh
+sqlboot start
+```
 
 ## Troubleshooting
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { runCli } from '../../src/cli';
-import { createCliDeps } from '../helpers/create-cli-deps';
+import { TEST_INSTALLER_PATH, createCliDeps } from '../helpers/create-cli-deps';
 
 describe('runCli help', () => {
   it('prints help with no args', () => {
@@ -20,7 +20,7 @@ describe('runCli help', () => {
     const status = runCli(['help'], deps);
 
     expect(status).toBe(0);
-    expect(deps.spawnSync).toHaveBeenCalledWith('bash', ['/pkg/sqlboot', 'help'], {
+    expect(deps.spawnSync).toHaveBeenCalledWith('bash', [TEST_INSTALLER_PATH, 'help'], {
       stdio: 'inherit',
       env: {}
     });

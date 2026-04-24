@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { runCli } from '../../src/cli';
-import { createCliDeps } from '../helpers/create-cli-deps';
+import { TEST_INSTALLER_PATH, createCliDeps } from '../helpers/create-cli-deps';
 
 describe('runCli spawn', () => {
   it('forwards init command', () => {
@@ -11,7 +11,7 @@ describe('runCli spawn', () => {
     const status = runCli(['init'], deps);
 
     expect(status).toBe(0);
-    expect(spawn).toHaveBeenCalledWith('bash', ['/pkg/sqlboot', 'init'], {
+    expect(spawn).toHaveBeenCalledWith('bash', [TEST_INSTALLER_PATH, 'init'], {
       stdio: 'inherit',
       env: {}
     });
@@ -24,7 +24,7 @@ describe('runCli spawn', () => {
     const status = runCli(['start'], deps);
 
     expect(status).toBe(0);
-    expect(spawn).toHaveBeenCalledWith('bash', ['/pkg/sqlboot', 'start'], {
+    expect(spawn).toHaveBeenCalledWith('bash', [TEST_INSTALLER_PATH, 'start'], {
       stdio: 'inherit',
       env: {}
     });
@@ -37,7 +37,7 @@ describe('runCli spawn', () => {
     const status = runCli(['status'], deps);
 
     expect(status).toBe(0);
-    expect(spawn).toHaveBeenCalledWith('bash', ['/pkg/sqlboot', 'status'], {
+    expect(spawn).toHaveBeenCalledWith('bash', [TEST_INSTALLER_PATH, 'status'], {
       stdio: 'inherit',
       env: {}
     });
@@ -50,7 +50,7 @@ describe('runCli spawn', () => {
     const status = runCli(['reset-pwd', 'new-secret'], deps);
 
     expect(status).toBe(0);
-    expect(spawn).toHaveBeenCalledWith('bash', ['/pkg/sqlboot', 'reset-pwd', 'new-secret'], {
+    expect(spawn).toHaveBeenCalledWith('bash', [TEST_INSTALLER_PATH, 'reset-pwd', 'new-secret'], {
       stdio: 'inherit',
       env: {}
     });

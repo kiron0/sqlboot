@@ -22,7 +22,27 @@ export function resolveInstallerPath(deps: CliDeps): string | null {
   return null;
 }
 
+export function resolveWindowsBootstrapperPath(deps: CliDeps): string | null {
+  const candidates = [
+    path.resolve(deps.installerDirname, '..', 'sqlboot-windows.ps1'),
+    path.resolve(deps.installerDirname, '..', '..', 'sqlboot-windows.ps1')
+  ];
+
+  for (const candidate of candidates) {
+    if (deps.fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  logError(`Bundled Windows bootstrapper not found: ${candidates.join(' or ')}`, deps.stderr);
+  return null;
+}
+
 export function ensureInstallerExecutable(deps: CliDeps, installerPath: string): boolean {
+  if (deps.platform === 'win32') {
+    return true;
+  }
+
   try {
     deps.fs.chmodSync(installerPath, INSTALLER_EXECUTABLE_MODE);
     return true;
@@ -34,10 +54,7 @@ export function ensureInstallerExecutable(deps: CliDeps, installerPath: string):
 }
 
 export function getBash(osPlatform: NodeJS.Platform, stderr: NodeJS.WriteStream): string | null {
-  if (osPlatform === 'win32') {
-    logError('bash is required.', stderr);
-    return null;
-  }
-
+  void stderr;
+  void osPlatform;
   return 'bash';
 }

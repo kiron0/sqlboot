@@ -2,6 +2,21 @@
 
 All notable changes to `sqlboot` are tracked here.
 
+## 1.0.6
+
+- Added a Windows PowerShell bootstrapper for running `npx sqlboot init` from native Windows.
+- Windows bootstrap now prepares WSL2 Ubuntu and Docker Desktop where possible, then runs the existing Linux installer inside WSL.
+- Added Windows command forwarding for `start`, `status`, `logs`, `doctor`, `stop`, `reset-pwd`, and `uninstall`.
+- Added `sqlboot uninstall --purge` to remove Windows-side sqlboot setup, including Docker Desktop, the sqlboot WSL distro, and Windows WSL optional features.
+- Added a SQL*Plus runtime dependency repair for missing `libaio.so.1` on Linux/WSL start.
+- Added Windows-side WSL preflight repair for SQL*Plus runtime dependencies before `sqlboot start`.
+- Added cleanup for temporary Instant Client ZIP downloads and apt package cache after setup.
+- Added stronger Ubuntu 24.04 `libaio` fallback handling for SQL*Plus, including `libaio1t64`, `libaio-dev`, `universe`, and direct package install fallback.
+- Added last-resort `libaio.so.1` extraction from the Ubuntu package payload when apt cannot install the runtime package.
+- Expanded `libaio.so.1` extraction fallback across multiple Ubuntu and Debian package URLs with visible repair tracing.
+- Fixed SQL*Plus `libaio.so.1` validation to test with the Instant Client directory in `LD_LIBRARY_PATH`, matching the real launch environment.
+- Expanded Windows purge to remove Ubuntu and WSL app packages where Windows exposes them.
+
 ## 1.0.5
 
 - Added `sqlboot uninstall` to remove sqlboot-managed resources.

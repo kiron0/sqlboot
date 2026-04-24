@@ -11,6 +11,7 @@ Available options:
   doctor                    Run environment checks
   stop                      Stop Oracle container
   uninstall                 Remove sqlboot-managed resources
+  uninstall --purge         Also remove Windows-side sqlboot setup where supported
   reset-pwd <new-password>  Reset Oracle password
 
 Environment overrides:
