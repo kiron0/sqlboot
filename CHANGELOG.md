@@ -23,6 +23,9 @@ All notable changes to `sqlboot` are tracked here.
 - Fixed Windows purge WSL feature cleanup to also match modern dotted WSL capability names and use Windows optional-feature APIs.
 - Improved Windows purge feedback by streaming the WSL uninstall live and warning when Ubuntu may ask for the sudo password.
 - Clarified Windows purge completion output so users know SQLBoot cannot remove the Windows-owned `C:\Windows\System32\wsl.exe` system stub.
+- Added self-repair for WSL Docker Desktop proxy credential-helper lookup failures during Oracle image pulls.
+- Added Instant Client download stall timeouts and retries so Oracle downloads do not hang forever at 0 bytes.
+- Fixed Windows purge exit-code handling so normal uninstall output is not mistaken for a failure status.
 
 ## 1.0.5
 

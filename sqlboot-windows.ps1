@@ -562,7 +562,17 @@ if [ -z "$docker_cli" ]; then
 fi
 mkdir -p /usr/local/bin
 escaped_docker_cli="$(printf '%s' "$docker_cli" | sed "s/'/'\\\\''/g")"
-printf '%s\n' '#!/bin/sh' "exec '$escaped_docker_cli' \"\$@\"" >/usr/local/bin/docker
+docker_cli_dir="$(dirname "$docker_cli")"
+escaped_docker_cli_dir="$(printf '%s' "$docker_cli_dir" | sed "s/'/'\\\\''/g")"
+{
+  printf '%s\n' '#!/bin/sh'
+  printf "DOCKER_CLI_DIR='%s'\n" "$escaped_docker_cli_dir"
+  printf '%s\n' 'case ":$PATH:" in'
+  printf '%s\n' '  *":$DOCKER_CLI_DIR:"*) ;;'
+  printf '%s\n' '  *) PATH="$DOCKER_CLI_DIR:$PATH"; export PATH ;;'
+  printf '%s\n' 'esac'
+  printf "exec '%s' \"\$@\"\n" "$escaped_docker_cli"
+} >/usr/local/bin/docker
 chmod +x /usr/local/bin/docker
 hash -r 2>/dev/null || true
 docker info >/dev/null 2>&1
@@ -936,7 +946,13 @@ function Invoke-SqlbootInWslNoExit {
   }
 
   $args = @('-d', $Distro, '--', 'env') + $envArgs + @('bash', $WslInstallerPath) + $InstallerArgs
-  & wsl.exe @args
+  & wsl.exe @args 2>&1 | ForEach-Object {
+    if ($_ -is [System.Management.Automation.ErrorRecord]) {
+      [Console]::Error.WriteLine($_.ToString())
+    } else {
+      [Console]::Out.WriteLine($_)
+    }
+  }
   return [int]$LASTEXITCODE
 }
 

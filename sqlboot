@@ -35,6 +35,10 @@ SQLPLUS_HISTORY="${SQLBOOT_SQLPLUS_HISTORY:-$HOME/.sqlplus_history}"
 
 READY_TIMEOUT_SECONDS="${SQLBOOT_READY_TIMEOUT_SECONDS:-900}"
 DOCKER_READY_TIMEOUT_SECONDS="${SQLBOOT_DOCKER_READY_TIMEOUT_SECONDS:-180}"
+DOWNLOAD_CONNECT_TIMEOUT_SECONDS="${SQLBOOT_DOWNLOAD_CONNECT_TIMEOUT_SECONDS:-20}"
+DOWNLOAD_MAX_TIME_SECONDS="${SQLBOOT_DOWNLOAD_MAX_TIME_SECONDS:-900}"
+DOWNLOAD_SPEED_LIMIT_BYTES="${SQLBOOT_DOWNLOAD_SPEED_LIMIT_BYTES:-1024}"
+DOWNLOAD_SPEED_TIME_SECONDS="${SQLBOOT_DOWNLOAD_SPEED_TIME_SECONDS:-30}"
 
 LINUX_IC_VERSION="21.19.0.0.0dbru"
 # Oracle publishes 21.x ZIPs for Linux x86_64. For macOS Intel, Oracle's
@@ -572,11 +576,20 @@ setup_wsl_windows_docker_proxy() {
 
   local escaped_docker_cli
   escaped_docker_cli="$(printf '%s' "$docker_cli" | sed "s/'/'\\\\''/g")"
+  local docker_cli_dir
+  docker_cli_dir="$(dirname "$docker_cli")"
+  local escaped_docker_cli_dir
+  escaped_docker_cli_dir="$(printf '%s' "$docker_cli_dir" | sed "s/'/'\\\\''/g")"
 
   local tmp_file
   tmp_file="$(mktemp)"
   {
     printf '%s\n' '#!/usr/bin/env sh'
+    printf "DOCKER_CLI_DIR='%s'\n" "$escaped_docker_cli_dir"
+    printf '%s\n' 'case ":$PATH:" in'
+    printf '%s\n' '  *":$DOCKER_CLI_DIR:"*) ;;'
+    printf '%s\n' '  *) PATH="$DOCKER_CLI_DIR:$PATH"; export PATH ;;'
+    printf '%s\n' 'esac'
     printf "exec '%s' \"\$@\"\n" "$escaped_docker_cli"
   } >"$tmp_file"
   chmod +x "$tmp_file"
@@ -587,6 +600,71 @@ setup_wsl_windows_docker_proxy() {
 
   hash -r 2>/dev/null || true
   log_ok "Configured WSL Docker proxy to Docker Desktop"
+}
+
+docker_error_is_missing_desktop_credential_helper() {
+  grep -Eqi 'docker-credential-desktop.*(not found|executable file not found|no such file|cannot find)'
+}
+
+make_temp_docker_config_dir() {
+  local temp_parent=""
+
+  if [[ "$IS_WSL" == "1" ]] && command_exists cmd.exe && command_exists wslpath; then
+    local windows_temp
+    windows_temp="$(cmd.exe /C echo %TEMP% 2>/dev/null | tr -d '\r' | tail -n 1 || true)"
+    if [[ -n "$windows_temp" ]]; then
+      temp_parent="$(wslpath -u "$windows_temp" 2>/dev/null || true)"
+    fi
+  fi
+
+  if [[ -n "$temp_parent" ]]; then
+    mkdir -p "$temp_parent" 2>/dev/null || true
+    if [[ -d "$temp_parent" && -w "$temp_parent" ]]; then
+      mktemp -d "$temp_parent/sqlboot-docker-config.XXXXXX" && return 0
+    fi
+  fi
+
+  mktemp -d
+}
+
+make_docker_config_arg_path() {
+  local config_dir=$1
+
+  if [[ "$IS_WSL" == "1" ]] && command_exists wslpath; then
+    wslpath -w "$config_dir" 2>/dev/null && return 0
+  fi
+
+  printf '%s\n' "$config_dir"
+}
+
+docker_pull_image() {
+  local image=$1
+  local output
+
+  if output="$(docker_cmd pull "${DOCKER_PLATFORM_ARGS[@]}" "$image" 2>&1)"; then
+    printf '%s\n' "$output"
+    return 0
+  fi
+
+  if printf '%s\n' "$output" | docker_error_is_missing_desktop_credential_helper; then
+    log_info "Docker Desktop credential helper is unavailable; retrying with a temporary Docker config"
+
+    local tmp_docker_config
+    tmp_docker_config="$(make_temp_docker_config_dir)"
+    printf '%s\n' '{"auths":{}}' >"$tmp_docker_config/config.json"
+    local docker_config_arg_path
+    docker_config_arg_path="$(make_docker_config_arg_path "$tmp_docker_config")"
+
+    if docker_cmd --config "$docker_config_arg_path" pull "${DOCKER_PLATFORM_ARGS[@]}" "$image"; then
+      rm -rf "$tmp_docker_config"
+      return 0
+    fi
+
+    rm -rf "$tmp_docker_config"
+  fi
+
+  printf '%s\n' "$output" >&2
+  return 1
 }
 
 docker_cmd() {
@@ -626,7 +704,7 @@ install_and_setup_docker() {
   ensure_docker_running
 
   log_info "Pulling Oracle XE image"
-  docker_cmd pull "${DOCKER_PLATFORM_ARGS[@]}" "$ORACLE_IMAGE"
+  docker_pull_image "$ORACLE_IMAGE"
   log_ok "Oracle XE image is available"
 
   create_oracle_container
@@ -748,7 +826,26 @@ download_file() {
   fi
 
   log_info "Downloading $(basename "$dest")"
-  curl -fL --retry 3 --retry-delay 3 -o "$dest" "$url"
+  local curl_args=(
+    -fL
+    --retry 5
+    --retry-delay 3
+    --connect-timeout "$DOWNLOAD_CONNECT_TIMEOUT_SECONDS"
+    --max-time "$DOWNLOAD_MAX_TIME_SECONDS"
+    --speed-limit "$DOWNLOAD_SPEED_LIMIT_BYTES"
+    --speed-time "$DOWNLOAD_SPEED_TIME_SECONDS"
+    -o "$dest"
+    "$url"
+  )
+
+  if curl --help all 2>/dev/null | grep -Fq -- '--retry-all-errors'; then
+    curl_args=(--retry-all-errors "${curl_args[@]}")
+  fi
+
+  if ! curl "${curl_args[@]}"; then
+    rm -f "$dest"
+    die "Download stalled or failed: $(basename "$dest"). Check your connection, then rerun sqlboot init; SQLBoot will retry automatically."
+  fi
 }
 
 install_instant_client() {
